@@ -1,0 +1,79 @@
+---
+title: "Weight Lifting Performance Prediction"
+author: "David Currie"
+date: "September 21, 2014"
+output: html_document
+---
+
+# Introduction   
+
+This exercise involves using human activity recognition test data to develop a prediction algorithm that identifies various quality of execution measures for a simple weight lifting activity.  The data include gyro and accelerometer readings from sensors attached to a barbell as well as the belt and wrist of the subject performing the lift.  Five classes of quality were defined for each lift as:
+
+A:  exactly according to the specification (Class A)   
+B:  throwing the elbows to the front (Class B)   
+C:  lifting the dumbbell only halfway (Class C)   
+D:  lowering the dumbbell only halfway (Class D)   
+E:  throwing the hips to the front (Class E)
+
+More details are available at: http://groupware.les.inf.puc-rio.br/har#ixzz3DzTMuKBm
+
+# Loading and Cleaning the Data   
+The training dataset contains a large number of measurements, many of which are incomplete or missing.  The first step is to load the data, select the columns of interest, and create subsets for training and testing of the learning algorithm.    
+
+```{r setup}
+library(caret)
+library(randomForest)
+set.seed(7123)
+wt.data<-read.csv('data/pml-training.csv',stringsAsFactors=TRUE)
+
+# select the good observations
+wt.sel.data<-wt.data[,c(8:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+
+# now create training and testing subsets 90/10
+inTrain<-createDataPartition(y=wt.sel.data$classe,p=0.9,list=FALSE)
+training<-wt.sel.data[inTrain,]
+testing<-wt.sel.data[-inTrain,]
+```
+
+This results in two fairly large data frames, with the following characteristics:  
+Training data:  `r dim(training)`    
+Testing data:   `r dim(testing)`     
+
+# Building a Machine Learning Algorithm   
+The large number of variables and multiple outcomes makes this an ideal problem for the Random Forest approach.  
+```{r modelfit}
+modelFile<-"forestfit.RData"
+if(!file.exists(modelFile)){
+    fit.rf<-randomForest(classe ~ .,data=training,proximity=TRUE,importance=TRUE)
+    save(fit.rf,file=modelFile)} 
+
+load(modelFile)
+```
+
+
+The process is somewhat time consuming, but the result indicates an excellent error rate, as shown.   
+`r print(fit.rf$confusion)`
+
+# Cross-validation   
+Using the test data extracted from the original data, we can cross-validate the result and generate a confusion matrix of the errors.   
+```{r crossvalidate}
+pred<-predict(fit.rf,newdata=testing)
+table(pred,testing$classe)
+```
+This indicates we should expect an out of sample error rate of `r 100*sum(pred!=testing$classe)/sum(pred==testing$classe)`%.      
+
+# Processing the Test Dataset   
+The final part of the exercise is to use the model to predict the class for the 20 observations in the test dataset. First, we load and clean the data in the same way we treated the training data.       
+```{r loadproblems}
+problems<-read.csv('data/pml-testing.csv')
+problems.sel<-problems[,c(8:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+```
+
+Then apply the predict function and echo the answers.   
+```{r answers}
+answers<-predict(fit.rf,newdata=problems.sel)
+answers
+```
+Note, the mechanism used to upload these answers leaves much to be desired.
+
+
